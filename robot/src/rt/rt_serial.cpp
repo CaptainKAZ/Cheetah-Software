@@ -14,16 +14,20 @@
 
 #define termios asmtermios
 
-#include <asm/termios.h>
+//#include <asm/termios.h>
 
 #undef termios
 
 #include <termios.h>
 #include <math.h>
 #include <pthread.h>
-#include <stropts.h>
+//#include <stropts.h>
 #include <endian.h>
 #include <stdint.h>
+
+#include <asm/ioctls.h>
+#include <sys/ioctl.h>
+#include <asm/termbits.h>
 
 #include "rt/rt_serial.h"
 
