@@ -18,7 +18,7 @@
 
 #undef termios
 
-#include <termios.h>
+//#include <termios.h>
 #include <math.h>
 #include <pthread.h>
 //#include <stropts.h>
