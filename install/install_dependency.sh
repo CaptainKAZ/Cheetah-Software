@@ -1,1 +1,0 @@
-apt install build-essential openjdk-8-jdk python-dev libeigen3-dev mesa-common-dev freeglut3-dev coinor-libipopt-dev libblas-dev liblapack-dev gfortran liblapack-dev coinor-libipopt-dev cmake gcc build-essential libglib2.0-dev -y
