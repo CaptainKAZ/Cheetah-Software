@@ -58,6 +58,9 @@ add_subdirectory(robot)
 add_subdirectory(third-party)
 add_subdirectory(common)
 
+#our spine
+add_subdirectory(spine)
+
 if(NO_SIM)
 
 else(NO_SIM)
