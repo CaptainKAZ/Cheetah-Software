@@ -5,35 +5,36 @@
  * @brief: a socketcan wrapper
  */
 #pragma once
-#include <linux/can.h>
-#include <net/if.h>
 #include <functional>
+#include <linux/can.h>
 #include <mutex>
+#include <net/if.h>
 #include <pthread.h>
 #include <queue>
 #include <string>
 
-
-
 class SocketCan {
 public:
   SocketCan() = default;
+  SocketCan(const std::string &interfaceName, uint32_t bitrate) {
+    open(interfaceName, bitrate);
+  }
   ~SocketCan();
-  void open(const std::string &interfaceName);
+  void open(const std::string &interfaceName, uint32_t bitrate);
   bool isOpen() const;
-  void bindRxCallback(std::function<void(struct can_frame &)> callback);
+  void bindRxCallback(const std::function<bool(struct can_frame &)> &callback);
+  void clearRxCallback();
   void close();
-  const SocketCan *operator>>(struct can_frame &frame) ;
-  const SocketCan *operator<<(struct can_frame &frame) ;
+  const SocketCan *operator>>(struct can_frame &frame);
+  const SocketCan *operator<<(struct can_frame &frame);
 
 private:
   int sfd_ = -1;
-  std::function<void(struct can_frame &)> rxCallback_ = nullptr;
-  [[noreturn]]static void* rxThread_(void *argv);
+  std::vector<std::function<bool(struct can_frame &, SocketCan *)>>
+      rxCallbacks_;
+  [[noreturn]] static void *rxThread_(void *argv);
   std::queue<struct can_frame> rxQueue_;
   std::mutex rxMutex_;
   std::mutex txMutex_;
-  pthread_t pRxThread_= 0;
+  pthread_t pRxThread_ = 0;
 };
-
-

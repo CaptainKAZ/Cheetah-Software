@@ -4,6 +4,7 @@
 
 #include "socketcan.h"
 #include <bits/unistd.h>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <pthread.h>
@@ -11,7 +12,6 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <utility>
 
 SocketCan::~SocketCan() {
   if (this->isOpen()) {
@@ -19,9 +19,35 @@ SocketCan::~SocketCan() {
   }
 }
 
-void SocketCan::open(const std::string &interfaceName) {
+void SocketCan::open(const std::string &interfaceName, const uint32_t bitrate) {
   ifreq ifr{};
   sockaddr_can addr{};
+  FILE *fp;
+  std::string command = "ip link set " + interfaceName + " type can bitrate " +
+                        std::to_string(bitrate);
+  std::string ret;
+  char buf;
+  fp = ::popen(command.c_str(), "r");
+  if (fp == nullptr) {
+    throw std::runtime_error("Error setting bitrate: popen failed");
+  }
+  while (EOF != (buf = (char)::fgetc(fp))) {
+    ret += buf;
+  }
+  std::cout << "[Bitrate Setting]" << ret << std::endl;
+  auto retVal = ::pclose(fp);
+  if (retVal == 127) {
+    throw std::runtime_error("Error setting bitrate: bad command:\n" + command);
+  } else if (retVal == -1) {
+    throw std::runtime_error(
+        "Error setting bitrate: can't get child thread status");
+  } else if (WIFEXITED(retVal)) {
+    std::cout << "Bitrate setting exited, status=" << WEXITSTATUS(retVal)
+              << std::endl;
+  } else if (WIFSIGNALED(retVal)) {
+    throw std::runtime_error("Bitrate setting killed by signal " +
+                             std::to_string(WTERMSIG(retVal)));
+  }
   if ((sfd_ = socket(PF_CAN, SOCK_RAW, CAN_RAW) < 0)) {
     throw std::runtime_error("Can't open socket");
   }
@@ -70,8 +96,12 @@ bool SocketCan::isOpen() const { return sfd_ >= 0; }
     FD_SET(self->sfd_, &descriptors);
     if (select(self->sfd_ + 1, &descriptors, nullptr, nullptr, &timeout)) {
       if (::read(self->sfd_, &rxFrame, sizeof(struct can_frame))) {
-        if (self->rxCallback_ != nullptr) {
-          self->rxCallback_(rxFrame);
+        if (!self->rxCallbacks_.empty()) {
+          for (auto &callback : self->rxCallbacks_) {
+            if (callback(rxFrame, self)) {
+              break;
+            }
+          }
         } else {
           std::lock_guard<std::mutex> lock(self->rxMutex_);
           self->rxQueue_.push(rxFrame);
@@ -85,9 +115,15 @@ bool SocketCan::isOpen() const { return sfd_ >= 0; }
 }
 
 void SocketCan::bindRxCallback(
-    std::function<void(struct can_frame &)> callback) {
+    const std::function<bool(struct can_frame &)> &callback) {
   std::lock_guard<std::mutex> lock(rxMutex_);
-  rxCallback_ = std::move(callback);
+  rxCallbacks_.push_back(callback);
+  rxQueue_ = std::queue<struct can_frame>();
+}
+
+void SocketCan::clearRxCallback() {
+  std::lock_guard<std::mutex> lock(rxMutex_);
+  rxCallbacks_.clear();
   rxQueue_ = std::queue<struct can_frame>();
 }
 
@@ -114,12 +150,12 @@ const SocketCan *SocketCan::operator>>(struct can_frame &frame) {
   if (!isOpen()) {
     throw std::runtime_error("Can't receive frame, socket is not open");
   }
-  if (rxCallback_ != nullptr) {
+  if (!rxCallbacks_.empty()) {
     throw std::runtime_error("Can't receive frame, callback is set");
   }
   std::lock_guard<std::mutex> lock(rxMutex_);
   if (rxQueue_.empty()) {
-    memset(&frame,0,sizeof(can_frame));
+    memset(&frame, 0, sizeof(can_frame));
   } else {
     frame = rxQueue_.front();
     rxQueue_.pop();
