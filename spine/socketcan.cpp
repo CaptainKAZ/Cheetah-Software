@@ -3,7 +3,6 @@
 //
 
 #include "socketcan.h"
-#include <bits/unistd.h>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -22,43 +21,27 @@ SocketCan::~SocketCan() {
 void SocketCan::open(const std::string &interfaceName, const uint32_t bitrate) {
   ifreq ifr{};
   sockaddr_can addr{};
-  FILE *fp;
-  std::string command = "ip link set " + interfaceName + " type can bitrate " +
-                        std::to_string(bitrate);
-  std::string ret;
-  char buf;
-  fp = ::popen(command.c_str(), "r");
-  if (fp == nullptr) {
-    throw std::runtime_error("Error setting bitrate: popen failed");
-  }
-  while (EOF != (buf = (char)::fgetc(fp))) {
-    ret += buf;
-  }
-  std::cout << "[Bitrate Setting]" << ret << std::endl;
-  auto retVal = ::pclose(fp);
-  if (retVal == 127) {
-    throw std::runtime_error("Error setting bitrate: bad command:\n" + command);
-  } else if (retVal == -1) {
-    throw std::runtime_error(
-        "Error setting bitrate: can't get child thread status");
-  } else if (WIFEXITED(retVal)) {
-    std::cout << "Bitrate setting exited, status=" << WEXITSTATUS(retVal)
-              << std::endl;
-  } else if (WIFSIGNALED(retVal)) {
-    throw std::runtime_error("Bitrate setting killed by signal " +
-                             std::to_string(WTERMSIG(retVal)));
-  }
-  if ((sfd_ = socket(PF_CAN, SOCK_RAW, CAN_RAW) < 0)) {
-    throw std::runtime_error("Can't open socket");
+  interfaceName_ = interfaceName;
+  system(("sudo ip link set " + interfaceName + " type can bitrate " +
+          std::to_string(bitrate))
+             .c_str());
+  system(("sudo ifconfig " + interfaceName + " up").c_str());
+  system(("sudo ip -details link show " + interfaceName).c_str());
+  if ((sfd_ = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
+    throw std::runtime_error("Can't open socket: " +
+                             std::string(strerror(errno)));
   }
   strncpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ);
   if (ioctl(sfd_, SIOCGIFINDEX, &ifr) < 0) {
-    throw std::runtime_error("Can't get interface index");
+    throw std::runtime_error(
+        "Can't get interface index: " + std::string(strerror(errno)) + " " +
+        std::to_string(sfd_));
   }
   addr.can_family = AF_CAN;
   addr.can_ifindex = ifr.ifr_ifindex;
   if (bind(sfd_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-    throw std::runtime_error("Can't bind socket");
+    throw std::runtime_error("Can't bind socket: " +
+                             std::string(strerror(errno)));
   }
   std::cout << "Successfully open " << interfaceName << " at index "
             << ifr.ifr_ifindex << std::endl;
@@ -77,9 +60,10 @@ void SocketCan::open(const std::string &interfaceName, const uint32_t bitrate) {
   if (pthread_attr_setschedparam(&canAttr, &canSchedParam)) {
     throw std::runtime_error("Can't set thread priority");
   }
-
-  if (pthread_create(&pRxThread_, &canAttr, &SocketCan::rxThread_, this)) {
-    throw std::runtime_error("Can't create thread");
+  if (int err = pthread_create(&rxThreadHandle_, &canAttr,
+                               &SocketCan::rxThread_, this)) {
+    throw std::runtime_error("Can't create thread: " +
+                             std::string(strerror(err)));
   }
 }
 
@@ -115,7 +99,7 @@ bool SocketCan::isOpen() const { return sfd_ >= 0; }
 }
 
 void SocketCan::bindRxCallback(
-    const std::function<bool(struct can_frame &)> &callback) {
+    const std::function<bool(struct can_frame &, SocketCan *)> &callback) {
   std::lock_guard<std::mutex> lock(rxMutex_);
   rxCallbacks_.push_back(callback);
   rxQueue_ = std::queue<struct can_frame>();
@@ -129,11 +113,12 @@ void SocketCan::clearRxCallback() {
 
 void SocketCan::close() {
   if (isOpen()) {
-    pthread_cancel(pRxThread_);
-    pthread_join(pRxThread_, nullptr);
+    pthread_cancel(rxThreadHandle_);
+    pthread_join(rxThreadHandle_, nullptr);
     ::close(sfd_);
     sfd_ = -1;
   }
+  system(("sudo ifconfig " + interfaceName_ + " down").c_str());
 }
 
 const SocketCan *SocketCan::operator<<(struct can_frame &frame) {

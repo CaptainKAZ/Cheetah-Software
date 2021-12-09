@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
   try {
     pSpine = new Spine();
   } catch (...) {
-    exit(-1);
+    throw;
   }
 
   atexit(exitHandler);

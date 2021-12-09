@@ -22,7 +22,8 @@ public:
   ~SocketCan();
   void open(const std::string &interfaceName, uint32_t bitrate);
   bool isOpen() const;
-  void bindRxCallback(const std::function<bool(struct can_frame &)> &callback);
+  void bindRxCallback(
+      const std::function<bool(struct can_frame &, SocketCan *)> &callback);
   void clearRxCallback();
   void close();
   const SocketCan *operator>>(struct can_frame &frame);
@@ -30,11 +31,12 @@ public:
 
 private:
   int sfd_ = -1;
+  std::string interfaceName_;
   std::vector<std::function<bool(struct can_frame &, SocketCan *)>>
       rxCallbacks_;
   [[noreturn]] static void *rxThread_(void *argv);
   std::queue<struct can_frame> rxQueue_;
   std::mutex rxMutex_;
   std::mutex txMutex_;
-  pthread_t pRxThread_ = 0;
+  pthread_t rxThreadHandle_ = 0;
 };
