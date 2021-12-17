@@ -21,7 +21,7 @@ SocketCan::~SocketCan() {
 void SocketCan::open(const std::string &interfaceName, const uint32_t bitrate) {
   ifreq ifr{};
   sockaddr_can addr{};
-  interfaceName_ = interfaceName;
+  this->interfaceName = interfaceName;
   system(("sudo ip link set " + interfaceName + " type can bitrate " +
           std::to_string(bitrate))
              .c_str());
@@ -118,7 +118,7 @@ void SocketCan::close() {
     ::close(sfd_);
     sfd_ = -1;
   }
-  system(("sudo ifconfig " + interfaceName_ + " down").c_str());
+  system(("sudo ifconfig " + interfaceName + " down").c_str());
 }
 
 const SocketCan *SocketCan::operator<<(struct can_frame &frame) {
@@ -127,7 +127,7 @@ const SocketCan *SocketCan::operator<<(struct can_frame &frame) {
   }
   std::lock_guard<std::mutex> lock(txMutex_);
   if (::write(sfd_, &frame, sizeof(struct can_frame)) < 0) {
-    throw std::runtime_error("Can't send frame");
+    throw std::runtime_error("Can't send frame: "+std::string(strerror(errno)));
   }
   return this;
 }

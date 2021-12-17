@@ -14,7 +14,7 @@
 #include <string>
 
 class SocketCan {
-public:
+ public:
   SocketCan() = default;
   SocketCan(const std::string &interfaceName, uint32_t bitrate) {
     open(interfaceName, bitrate);
@@ -28,10 +28,9 @@ public:
   void close();
   const SocketCan *operator>>(struct can_frame &frame);
   const SocketCan *operator<<(struct can_frame &frame);
-
-private:
+  std::string interfaceName;
+ private:
   int sfd_ = -1;
-  std::string interfaceName_;
   std::vector<std::function<bool(struct can_frame &, SocketCan *)>>
       rxCallbacks_;
   [[noreturn]] static void *rxThread_(void *argv);

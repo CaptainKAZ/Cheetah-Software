@@ -6,10 +6,11 @@
 #include "sys/time.h"
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
 
 void MiniCheetahMotor::controlRaw(double qDes, double qdDes, double tauDes,
                                   double kP, double kD) {
-  struct can_frame frame {};
+  struct can_frame frame{};
   if (id_ == 0) {
     throw std::runtime_error("Motor is not attach to can id");
   }
@@ -23,7 +24,7 @@ void MiniCheetahMotor::controlRaw(double qDes, double qdDes, double tauDes,
   frame.data[0] = posInt >> 8;
   frame.data[1] = posInt & 0xFF;
   frame.data[2] = velInt >> 4;
-  frame.data[3] = ((velInt & 0xF) << 4) | (kpInt >> 8);
+  frame.data[3] = ((velInt & 0xF) << 4) | ((kpInt) >> 8);
   frame.data[4] = kpInt & 0xFF;
   frame.data[5] = kdInt >> 4;
   frame.data[6] = ((kdInt & 0xF) << 4) | (currentInt >> 8);
@@ -43,13 +44,16 @@ void MiniCheetahMotor::attach(unsigned char id, SocketCan *sc) {
   sc_ = sc;
   sc_->bindRxCallback(
       std::bind(MiniCheetahMotor::canProbe, this, std::placeholders::_1, sc));
+  struct can_frame frame{.can_id=id_, .can_dlc=8, .data={0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC}};
+  *sc_ << frame;
 }
 
 bool MiniCheetahMotor::canProbe(MiniCheetahMotor *self, struct can_frame &frame,
                                 SocketCan *sc) {
-  if (self->sc_ == sc && self->id_ == frame.can_id && frame.can_dlc == 6) {
+  if (self->sc_ == sc && self->id_ == frame.data[0] && frame.can_dlc == 8 && frame.can_id == 0) {
+    struct timeval lastRxTime={.tv_sec=self->rxTime.tv_sec,.tv_usec=self->rxTime.tv_usec};
     gettimeofday(&self->rxTime, nullptr);
-    double q = self->pos2Q((frame.data[0] << 8u) | frame.data[1]);
+    double q = self->pos2Q((uint16_t) (frame.data[1] << 8u) | (frame.data[2] & 0xFF));
     if (!self->firstTimeRx) {
       if (q - self->q > M_PI) {
         self->turns--;
@@ -60,8 +64,10 @@ bool MiniCheetahMotor::canProbe(MiniCheetahMotor *self, struct can_frame &frame,
       self->firstTimeRx = true;
     }
     self->q = q;
-    self->qd = self->vel2Qd((frame.data[2] << 8u) | frame.data[3]);
-    self->tau = self->current2Tau((frame.data[4] << 8u) | frame.data[5]);
+    self->qd = self->vel2Qd((uint16_t) (frame.data[3] << 4u) | ((frame.data[4]) >> 4u));
+    self->tau = self->current2Tau(((uint16_t) (frame.data[4] & 0xF) << 8u) | frame.data[5]);
+    //std::cout<<"q:"<<self->q<<" qd:"<<self->qd<<" tau:"<<self->tau<<std::endl;
+    //std::cout<<self->rxTime.tv_usec-lastRxTime.tv_usec<<std::endl;
     return true;
   } else {
     return false;
@@ -78,7 +84,7 @@ uint16_t MiniCheetahMotor::double2uint(double val, double min, double max,
   } else if (val < min) {
     val = min;
   }
-  return (int16_t)((val - min) * ((double)(1 << bits) / (max - min)));
+  return (int16_t) ((val - min) * ((float) (1 << bits) / (max - min)));
 }
 
 double MiniCheetahMotor::uint2double(int val, double min, double max,
@@ -86,7 +92,15 @@ double MiniCheetahMotor::uint2double(int val, double min, double max,
   if (min > max) {
     throw std::runtime_error("min>max? you are insane!");
   }
-  return ((double)val * (max - min) / ((double)(1 << bits) - 1)) + min;
+  return ((double) val * (max - min) / ((float) (1 << bits) - 1)) + min;
+}
+void MiniCheetahMotor::stop() {
+  if (id_ != 0 && sc_ != nullptr) {
+    struct can_frame frame{.can_id=id_, .can_dlc=8, .data={0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD}};
+    *sc_ << (frame);
+  } else {
+    throw std::runtime_error("Motor is not attached");
+  }
 }
 
 double AK10_9Motor::current2Tau(uint16_t current) {
