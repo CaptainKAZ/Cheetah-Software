@@ -28,7 +28,7 @@ class SocketCan {
   void close();
   const SocketCan *operator>>(struct can_frame &frame);
   const SocketCan *operator<<(struct can_frame &frame);
-  std::string interfaceName;
+  std::string interfaceName_;
  private:
   int sfd_ = -1;
   std::vector<std::function<bool(struct can_frame &, SocketCan *)>>

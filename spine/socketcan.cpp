@@ -21,12 +21,12 @@ SocketCan::~SocketCan() {
 void SocketCan::open(const std::string &interfaceName, const uint32_t bitrate) {
   ifreq ifr{};
   sockaddr_can addr{};
-  this->interfaceName = interfaceName;
-  system(("sudo ip link set " + interfaceName + " type can bitrate " +
+  interfaceName_ = interfaceName;
+  (void)system(("sudo ip link set " + interfaceName + " type can bitrate " +
           std::to_string(bitrate))
              .c_str());
-  system(("sudo ifconfig " + interfaceName + " up").c_str());
-  system(("sudo ip -details link show " + interfaceName).c_str());
+  (void)system(("sudo ifconfig " + interfaceName + " up").c_str());
+  (void)system(("sudo ip -details link show " + interfaceName).c_str());
   if ((sfd_ = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
     throw std::runtime_error("Can't open socket: " +
                              std::string(strerror(errno)));
@@ -118,7 +118,7 @@ void SocketCan::close() {
     ::close(sfd_);
     sfd_ = -1;
   }
-  system(("sudo ifconfig " + interfaceName + " down").c_str());
+  (void)system(("sudo ifconfig " + interfaceName_ + " down").c_str());
 }
 
 const SocketCan *SocketCan::operator<<(struct can_frame &frame) {

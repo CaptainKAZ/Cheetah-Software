@@ -11,8 +11,8 @@ Spine *pSpine = nullptr;
 bool needStop = false;
 
 void exitHandler() {
-  system("cansend can0 003#FF.FF.FF.FF.FF.FF.FF.FD");
-  system("ifconfig can0 down");
+  (void)system("cansend can0 003#FF.FF.FF.FF.FF.FF.FF.FD");
+  (void)system("ifconfig can0 down");
   exit(-1);
 }
 

@@ -3,10 +3,9 @@
 //
 
 #include "motor.h"
-#include "sys/time.h"
 #include <cmath>
 #include <stdexcept>
-#include <iostream>
+
 
 void MiniCheetahMotor::controlRaw(double qDes, double qdDes, double tauDes,
                                   double kP, double kD) {
@@ -44,30 +43,27 @@ void MiniCheetahMotor::attach(unsigned char id, SocketCan *sc) {
   sc_ = sc;
   sc_->bindRxCallback(
       std::bind(MiniCheetahMotor::canProbe, this, std::placeholders::_1, sc));
-  struct can_frame frame{.can_id=id_, .can_dlc=8, .data={0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC}};
+  struct can_frame frame={.can_id=id_, .can_dlc=8, .data={0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC}};
   *sc_ << frame;
 }
 
 bool MiniCheetahMotor::canProbe(MiniCheetahMotor *self, struct can_frame &frame,
                                 SocketCan *sc) {
   if (self->sc_ == sc && self->id_ == frame.data[0] && frame.can_dlc == 8 && frame.can_id == 0) {
-    struct timeval lastRxTime={.tv_sec=self->rxTime.tv_sec,.tv_usec=self->rxTime.tv_usec};
-    gettimeofday(&self->rxTime, nullptr);
+    self->rxTime_ = std::chrono::high_resolution_clock::now();
     double q = self->pos2Q((uint16_t) (frame.data[1] << 8u) | (frame.data[2] & 0xFF));
-    if (!self->firstTimeRx) {
-      if (q - self->q > M_PI) {
-        self->turns--;
-      } else if (q - self->q < -M_PI) {
-        self->turns++;
+    if (!self->firstTimeRx_) {
+      if (q - self->q_ > M_PI) {
+        self->turns_--;
+      } else if (q - self->q_ < -M_PI) {
+        self->turns_++;
       }
     } else {
-      self->firstTimeRx = true;
+      self->firstTimeRx_ = true;
     }
-    self->q = q;
-    self->qd = self->vel2Qd((uint16_t) (frame.data[3] << 4u) | ((frame.data[4]) >> 4u));
-    self->tau = self->current2Tau(((uint16_t) (frame.data[4] & 0xF) << 8u) | frame.data[5]);
-    //std::cout<<"q:"<<self->q<<" qd:"<<self->qd<<" tau:"<<self->tau<<std::endl;
-    //std::cout<<self->rxTime.tv_usec-lastRxTime.tv_usec<<std::endl;
+    self->q_ = q;
+    self->qd_ = self->vel2Qd((uint16_t) (frame.data[3] << 4u) | ((frame.data[4]) >> 4u));
+    self->tau_ = self->current2Tau(((uint16_t) (frame.data[4] & 0xF) << 8u) | frame.data[5]);
     return true;
   } else {
     return false;

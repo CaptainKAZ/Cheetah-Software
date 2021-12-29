@@ -50,15 +50,15 @@ void Spine::loop() {
   spi_data_t spi_data{};
   spi_torque_t spi_torque{};
   for (int i = 0; i < 4; i++) {
-    spi_data.q_abad[i] = (float)leg[i].motor[0].q;
-    spi_data.qd_abad[i] = (float)leg[i].motor[0].qd;
-    spi_data.q_hip[i] = (float)leg[i].motor[1].q;
-    spi_data.qd_hip[i] = (float)leg[i].motor[1].qd;
-    spi_data.q_knee[i] = (float)leg[i].motor[2].q;
-    spi_data.qd_knee[i] = (float)leg[i].motor[2].qd;
-    spi_torque.tau_abad[i] = (float)leg[i].motor[0].tau;
-    spi_torque.tau_hip[i] = (float)leg[i].motor[1].tau;
-    spi_torque.tau_knee[i] = (float)leg[i].motor[2].tau;
+    spi_data.q_abad[i] = (float)leg[i].motor[0].q_;
+    spi_data.qd_abad[i] = (float)leg[i].motor[0].qd_;
+    spi_data.q_hip[i] = (float)leg[i].motor[1].q_;
+    spi_data.qd_hip[i] = (float)leg[i].motor[1].qd_;
+    spi_data.q_knee[i] = (float)leg[i].motor[2].q_;
+    spi_data.qd_knee[i] = (float)leg[i].motor[2].qd_;
+    spi_torque.tau_abad[i] = (float)leg[i].motor[0].tau_;
+    spi_torque.tau_hip[i] = (float)leg[i].motor[1].tau_;
+    spi_torque.tau_knee[i] = (float)leg[i].motor[2].tau_;
   }
   lcm_.publish("spi_data", &spi_data);
   lcm_.publish("spi_torque", &spi_torque);

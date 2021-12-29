@@ -5,14 +5,16 @@
 #pragma once
 
 #include "socketcan.h"
+#include "chrono"
 
 class Motor {
  public:
-  double q{};
-  double qd{};
-  double tau{};
-  int turns{};
-  timeval rxTime{};
+  double q_{};
+  double qd_{};
+  double tau_{};
+  int turns_{};
+
+  std::chrono::time_point<std::chrono::high_resolution_clock> rxTime_{};
 
   virtual void setQDes(double q_des) = 0;
 
@@ -67,7 +69,7 @@ class MiniCheetahMotor : public Motor {
   static bool canProbe(MiniCheetahMotor *self, struct can_frame &frame,
                        SocketCan *sc);
 
-  bool firstTimeRx = false;
+  bool firstTimeRx_ = false;
 
   static uint16_t double2uint(double val, double min, double max, int bits);
 
